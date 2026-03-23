@@ -102,6 +102,9 @@ def safe_output_path(user_path: str) -> str:
     if not resolved.startswith(base + os.sep) and resolved != base:
         raise HTTPException(400, "output_path must not escape the output directory")
     return resolved
+# /config/dump endpoint uses eval() and is disabled by default for security.
+# Set to "true" to enable (e.g. for local development).
+CONFIG_DUMP_ENABLED = os.environ.get("CRAWL4AI_CONFIG_DUMP_ENABLED", "false").lower() == "true"
 
 # ── default browser config helper ─────────────────────────────
 def get_default_browser_config() -> BrowserConfig:
@@ -331,6 +334,8 @@ async def get_token(req: TokenRequest):
 
 @app.post("/config/dump")
 async def config_dump(raw: RawCode):
+    if not CONFIG_DUMP_ENABLED:
+        raise HTTPException(403, "/config/dump is disabled. Set CRAWL4AI_CONFIG_DUMP_ENABLED=true to enable.")
     try:
         return JSONResponse(_safe_eval_config(raw.code.strip()))
     except Exception as e:
