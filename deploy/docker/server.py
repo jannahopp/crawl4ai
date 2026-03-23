@@ -102,9 +102,15 @@ def safe_output_path(user_path: str) -> str:
     if not resolved.startswith(base + os.sep) and resolved != base:
         raise HTTPException(400, "output_path must not escape the output directory")
     return resolved
+
 # /config/dump endpoint uses eval() and is disabled by default for security.
 # Set to "true" to enable (e.g. for local development).
 CONFIG_DUMP_ENABLED = os.environ.get("CRAWL4AI_CONFIG_DUMP_ENABLED", "false").lower() == "true"
+
+# /execute_js runs arbitrary JavaScript in the headless browser, which can
+# make unrestricted network requests (bypassing any Python-level SSRF checks).
+# Disabled by default. Set to "true" to enable.
+EXECUTE_JS_ENABLED = os.environ.get("CRAWL4AI_EXECUTE_JS_ENABLED", "false").lower() == "true"
 
 # ── default browser config helper ─────────────────────────────
 def get_default_browser_config() -> BrowserConfig:
@@ -575,6 +581,8 @@ async def execute_js(
         ```
 
     """
+    if not EXECUTE_JS_ENABLED:
+        raise HTTPException(403, "/execute_js is disabled. Set CRAWL4AI_EXECUTE_JS_ENABLED=true to enable.")
     validate_url_scheme(body.url)
     validate_url_target(body.url)
     from crawler_pool import get_crawler
@@ -588,6 +596,10 @@ async def execute_js(
         return JSONResponse(data)
     except Exception as e:
         raise HTTPException(500, detail=str(e))
+
+# Hide from MCP tool list when disabled
+if not EXECUTE_JS_ENABLED:
+    del execute_js.__mcp_kind__
 
 
 @app.get("/llm/{url:path}")
